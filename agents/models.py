@@ -4,9 +4,11 @@ Domain: Privacy-Preserving Federated Healthcare & FHE
 Standard: HIPAA Safe Harbor §164.514 / Google SecAgg Standards
 """
 import datetime
+import re
+import math
 from enum import Enum
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class UrgencyLevel(str, Enum):
@@ -21,6 +23,14 @@ class SystemIntegrityStatus(str, Enum):
     RECALIBRATION_REQUIRED = "RECALIBRATION_REQUIRED"
 
 
+# Maximum lengths for input validation to prevent abuse
+MAX_ID_LENGTH = 128
+MAX_DESCRIPTOR_LENGTH = 64
+MAX_ATTRIBUTE_KEY_LENGTH = 64
+MAX_ATTRIBUTE_VALUE_LENGTH = 512
+MAX_METRIC_VALUE = 1e9
+
+
 class SystemTaskPayload(BaseModel):
     task_id: str = Field(..., description="Unique task / case identifier")
     target_identifier: str = Field(..., description="Entity, patient key, or genomic/cryptographic target")
@@ -30,6 +40,46 @@ class SystemTaskPayload(BaseModel):
     is_critical_flag: bool = Field(default=False, description="Emergency escalation or high priority trigger")
     attributes: Dict[str, Any] = Field(default_factory=dict, description="Metadata key-value pairs")
     timestamp: str = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
+
+    @field_validator("task_id", "target_identifier")
+    @classmethod
+    def validate_identifier(cls, v, info):
+        if not v or not v.strip():
+            raise ValueError(f"{info.field_name} must not be empty")
+        if len(v) > MAX_ID_LENGTH:
+            raise ValueError(f"{info.field_name} exceeds maximum length of {MAX_ID_LENGTH}")
+        # Allow only safe characters: alphanumeric, hyphen, underscore, dot
+        if not re.match(r'^[A-Za-z0-9_\-\.]+$', v):
+            raise ValueError(f"{info.field_name} contains invalid characters")
+        return v.strip()
+
+    @field_validator("status_descriptor")
+    @classmethod
+    def validate_descriptor(cls, v):
+        if len(v) > MAX_DESCRIPTOR_LENGTH:
+            raise ValueError(f"status_descriptor exceeds maximum length of {MAX_DESCRIPTOR_LENGTH}")
+        return v.strip()
+
+    @field_validator("primary_metric", "secondary_metric")
+    @classmethod
+    def validate_metric(cls, v, info):
+        if not isinstance(v, (int, float)):
+            raise ValueError(f"{info.field_name} must be a number")
+        if abs(v) > MAX_METRIC_VALUE:
+            raise ValueError(f"{info.field_name} exceeds maximum allowed magnitude")
+        if math.isnan(v) or math.isinf(v):
+            raise ValueError(f"{info.field_name} must be finite")
+        return float(v)
+
+    @field_validator("attributes")
+    @classmethod
+    def validate_attributes(cls, v):
+        for key, val in v.items():
+            if len(str(key)) > MAX_ATTRIBUTE_KEY_LENGTH:
+                raise ValueError(f"Attribute key exceeds maximum length of {MAX_ATTRIBUTE_KEY_LENGTH}")
+            if len(str(val)) > MAX_ATTRIBUTE_VALUE_LENGTH:
+                raise ValueError(f"Attribute value exceeds maximum length of {MAX_ATTRIBUTE_VALUE_LENGTH}")
+        return v
 
 
 class AgentAlert(BaseModel):

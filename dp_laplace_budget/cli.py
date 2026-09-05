@@ -3,7 +3,6 @@ Command-Line Interface for DP-Laplace: Epsilon Privacy Budget Allocation & Query
 """
 import argparse
 import csv
-import json
 import sys
 from .models import FrontierPayload
 from .agents import DPLaplaceCoordinator
