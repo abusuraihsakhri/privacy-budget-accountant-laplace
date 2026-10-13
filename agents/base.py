@@ -3,6 +3,7 @@ Enterprise Security, PHI Outbound Guard, and HMAC-SHA256 Audit Trail.
 
 """
 import os
+import secrets
 import re
 import json
 import time
@@ -57,16 +58,16 @@ class PHIGuard:
 class AuditTrail:
     """Cryptographic Tamper-Evident HMAC-SHA256 Audit Trail."""
     def __init__(self, secret_key: Optional[str] = None):
-        resolved_key = secret_key or os.getenv("AUDIT_SECRET_KEY")
+        resolved_key = secret_key if secret_key is not None else os.getenv("AUDIT_SECRET_KEY")
         if not resolved_key:
             import warnings
             warnings.warn(
-                "AUDIT_SECRET_KEY not set. Using development-only fallback. "
-                "Set AUDIT_SECRET_KEY env var in production.",
+                "AUDIT_SECRET_KEY not set. Using an ephemeral random development key. "
+                "Set AUDIT_SECRET_KEY in production for consistent verification.",
                 RuntimeWarning,
                 stacklevel=2,
             )
-            resolved_key = "DEV-ONLY-INSECURE-KEY-REPLACE-ME"
+            resolved_key = secrets.token_hex(32)
         self.secret_key = resolved_key.encode("utf-8")
         self.logs: List[Dict[str, Any]] = []
 
@@ -93,14 +94,26 @@ class AuditTrail:
         return entry
 
     def verify_integrity(self) -> bool:
-        for i, entry in enumerate(self.logs):
-            prev = self.logs[i-1]["current_hash"] if i > 0 else "GENESIS_BLOCK_0000000000000000"
-            if entry["prev_hash"] != prev:
+        previous = "GENESIS_BLOCK_0000000000000000"
+        for entry in self.logs:
+            try:
+                if entry["prev_hash"] != previous:
+                    return False
+                message = "|".join((
+                    entry["audit_id"], entry["timestamp"], entry["actor"],
+                    entry["actor_tier"], entry["event_type"],
+                    entry["payload_hash"], entry["prev_hash"],
+                ))
+                expected = hmac.new(self.secret_key, message.encode("utf-8"), hashlib.sha256).hexdigest()
+                if not hmac.compare_digest(entry["current_hash"], expected):
+                    return False
+                previous = entry["current_hash"]
+            except (KeyError, TypeError, ValueError):
                 return False
         return True
 
     def get_trail(self) -> List[Dict[str, Any]]:
-        return self.logs
+        return [dict(entry) for entry in self.logs]
 
 
 GLOBAL_AUDIT = AuditTrail()
