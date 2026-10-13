@@ -1,216 +1,81 @@
 # Privacy Budget Accountant Laplace
 
-> **Domain:** Privacy-Preserving Healthcare & Federated Computing
-> **Reference Guidelines & Standards:** `HIPAA Safe Harbor §164.514 & Differential Privacy RDP`
+A local Laplace-mechanism demonstrator with session-scoped epsilon accounting, accompanied by the repository's existing Python task-audit service.
 
-<div align="center">
+## What works
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+The **browser calculator** in [`web/index.html`](web/index.html) runs without a server or Python. It adds Laplace noise to a numeric query result you supply, tracks a fixed epsilon budget across releases in the current tab, rejects over-budget releases, and exports only the noisy results as CSV. Randomness comes from the browser's Web Crypto API; the app uses no external resources, network requests, cookies or persistent storage.
 
-</div>
+The **Python accountant** (`dp_laplace_budget.accountant`) provides:
+- `PrivacyBudget(total_epsilon)` with basic sequential epsilon composition (pure DP, delta = 0)
+- `laplace_noise(scale)` with OS-backed random sampling
+- Global sensitivity helpers for unweighted counts and fixed-size, bounded means
+- Validation of finite parameters and rejection of releases that exceed the budget
 
----
+The existing `agents/` task-audit system remains available via the main CLI and FastAPI. It evaluates configurable-style **legacy thresholds**, records a process-local HMAC audit trail, and applies basic regex screening to select identifier formats. That audit system is distinct from the Laplace privacy accountant and is **not** an automated privacy/compliance certification system.
 
-## 📖 What It Does
+## Browser usage
 
-**Privacy Budget Accountant Laplace** is an advanced analytical and computational platform implementing Global sensitivity & calibrated Laplace noise differential privacy budget manager. It provides:
+Open `web/index.html` in a modern browser, or use the repository's GitHub Pages deployment if enabled. Set the total epsilon budget, select a count or bounded-mean query, supply its exact numeric result and epsilon allocation, and generate a noisy release. The table shows each disclosure and budget expenditure.
 
-- Multi-agent consensus evaluation with specialized workers for QC, safety, and protocol conformance
-- Zero-PHI outbound protection with pattern-based detection and redaction
-- Tamper-evident HMAC-SHA256 audit trail for all operations
-- Input validation and bounds checking to prevent abuse
-- REST API with FastAPI for integration with external systems
+The sensitivity conventions are:
 
----
+| Query | Neighboring datasets | Global sensitivity |
+| --- | --- | --- |
+| Unweighted count | Add or remove one record | 1 |
+| Mean of `n` bounded values in `[lower, upper]` | Replace one record with dataset size fixed at `n` | `(upper - lower) / n` |
 
-## ⚙️ Key Capabilities & Algorithmic Modules
+Noise is sampled from `Laplace(0, sensitivity / epsilon)`. Under **basic sequential composition**, epsilons of multiple releases are added.
 
-- **Deterministic Calculation Engine**: Strict compliance with standard reference formulations and thresholds.
-- **Risk & Urgency Classification**: Multi-tier categorization (ROUTINE, ELEVATED_RISK, CRITICAL_STAT_PANIC) with automated action recommendations.
-- **Validation & Guardrails**: Rigorous input bounds checking, length limits, and character validation to prevent injection attacks.
-- **PHI Protection**: Active regex inspection blocking SSNs, MRNs, phone numbers, emails, DOBs, and patient identifiers.
+**Privacy limitation:** These formulas only apply when the sensitivity, dataset bounds, neighboring-dataset relation and query design are correct. The calculator accepts an already-computed exact answer and does not inspect the underlying dataset. A new tab, browser session or CLI invocation creates a **new independent ledger**, not a legitimate reset of a real dataset's previously consumed privacy budget. Neither the browser nor the Python demo provides durable, cross-user or distributed budget enforcement. Do not use them as a production data-release gate or assume that differential privacy alone establishes HIPAA/GDPR compliance.
 
----
+## Install and run Python
 
-## 💻 Installation
+Requires Python 3.10 or newer.
 
 ```bash
-# Clone the repository
 git clone https://github.com/abusuraihsakhri/privacy-budget-accountant-laplace.git
 cd privacy-budget-accountant-laplace
+python -m pip install -e ".[server,test]"
 
-# Install dependencies
-pip install fastapi uvicorn pydantic pytest
-```
+# One session-local Laplace disclosure; outputs JSON
+python cli.py laplace --total-epsilon 1 --epsilon 0.2 --value 25 --sensitivity 1
 
----
-
-## 🚀 CLI Quickstart & Usage
-
-### 1. Single Task Evaluation
-```bash
+# Existing legacy audit workflow
 python cli.py audit --task-id TASK-001 --target TARGET-01 --primary 28.5 --secondary 14.2 --critical --status DISCORDANT
-```
-
-### 2. System Chat Query
-```bash
-python cli.py chat "What is the system status?"
-```
-
-### 3. Batch CSV Processing
-```bash
 python cli.py batch -i sample.csv -o results.csv
-```
-
-### 4. Verify Audit Trail Integrity
-```bash
 python cli.py verify-audit
-```
 
-### 5. Launch REST API Server
-```bash
+# Local API and browser interface at http://127.0.0.1:8000/
 python cli.py serve --host 127.0.0.1 --port 8000
 ```
 
-### Parameter Reference
-- `--task-id`: Unique task identifier (alphanumeric, hyphens, underscores only)
-- `--target`: Target entity identifier
-- `--primary`: Primary metric value (float)
-- `--secondary`: Secondary metric value (float)
-- `--critical`: Flag for critical priority
-- `--status`: Status descriptor (NOMINAL, DISCORDANT, ANOMALY, etc.)
+The older DP audit entry point also remains available: `dp-laplace-budget audit`. It performs legacy threshold triage; it does not generate Laplace noise. The default installed `privacy-budget-accountant-laplace` command maps to the main `cli.py`.
 
-### Input Data Schema (CSV Batch Mode)
+## API
 
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `task_id` | Unique task identifier | Required |
-| `target_identifier` | Target entity identifier | Required |
-| `primary_metric` | Primary measurement value | Required |
-| `secondary_metric` | Secondary measurement value | Optional |
-| `is_critical_flag` | Critical flag (true/false) | Optional |
-| `status_descriptor` | Status descriptor | Optional |
+The optional FastAPI server exposes `GET /` (browser demo), `GET /health`, `GET /metrics`, `POST /api/audit`, `POST /api/chat`, and `GET /api/audit/logs`. These endpoints belong to the legacy task-audit service. There is no persistent epsilon-ledger API.
 
----
+For container usage, set a strong secret in `AUDIT_SECRET_KEY`, then run `docker compose up --build` or build and run the Docker image directly. Do not publicly expose the audit API or logs without your own access controls.
 
-## 🛡️ Security & Enterprise Architecture
+## Security and privacy notes
 
-* **Zero-PHI Outbound Interceptor:** Active regex inspection blocking SSNs, MRNs, phone numbers, emails, DOBs, and patient identifiers. Raises `SecurityException` on violation.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Input Validation:** Strict bounds checking on all inputs including length limits, character whitelisting, and numeric range validation.
-* **Path Traversal Protection:** Batch mode validates file paths to prevent directory traversal attacks.
+- The browser demo keeps entries in memory and does not communicate with a server. Its CSV export includes noisy results and epsilon metadata, not exact inputs.
+- The HMAC audit trail verifies individual signatures and their chain links. Logs are in-memory and not durable across restarts. When `AUDIT_SECRET_KEY` is absent, a random ephemeral development key is used with a warning; configure a strong stable key for controlled deployments.
+- Regex identifier checks are incomplete and do **not** ensure all protected health information has been detected or de-identified.
+- The mock supervisory chat does not provide independent scientific verification; other model-provider labels currently resolve to the same mock implementation.
+- The enrichment modules (`enrichment.py`) are threshold-based placeholders, **not** implementations of RDP, Byzantine resilience, budget recycling or compliance checks.
 
-### Security Configuration
-
-**IMPORTANT:** Set the `AUDIT_SECRET_KEY` environment variable in production:
+## Tests
 
 ```bash
-# Linux/macOS
-export AUDIT_SECRET_KEY="your-secure-random-key-here"
-
-# Windows
-set AUDIT_SECRET_KEY=your-secure-random-key-here
+python -m pytest -q
+node --check web/app.js
+node --test tests/laplace_web.test.cjs
 ```
 
-If not set, the system will emit a runtime warning and use a development-only fallback key.
+The GitHub Actions workflow runs Python tests across supported interpreters and checks the static JavaScript. This repository also contains a separate Pages workflow for publishing `web/`; its live status depends on the repository's GitHub Pages configuration.
 
----
+## Technology and license
 
-## 🔌 REST API Endpoints
-
-| Method | Endpoint | Description |
-|:-------|:---------|:------------|
-| GET | `/health` | Health check |
-| GET | `/metrics` | Prometheus-compatible metrics |
-| POST | `/api/audit` | Submit task for evaluation |
-| POST | `/api/chat` | Query system status |
-| GET | `/api/audit/logs` | Get audit trail |
-
----
-
-## 🧪 Testing & Verification
-
-Run the automated test suite:
-
-```bash
-pytest -v
-```
-
-Execute high-throughput batch simulation benchmarks:
-
-```bash
-python simulator.py 1000
-```
-
-### Test Coverage
-- PHI guard enforcement (9 tests)
-- Input validation (8 tests)
-- Audit trail security (5 tests)
-- CLI error handling (3 tests)
-- Core functionality (9 tests)
-
----
-
-## 🐳 Container Deployment
-
-```bash
-# Build and run with Docker
-docker build -t privacy-budget-accountant-laplace .
-docker run -p 8000:8000 -e AUDIT_SECRET_KEY=your-secure-key privacy-budget-accountant-laplace
-
-# Or use docker-compose
-AUDIT_SECRET_KEY=your-secure-key docker-compose up
-```
-
-**Note:** Always set a secure `AUDIT_SECRET_KEY` when deploying to production.
-
----
-
-## 📁 Project Structure
-
-```
-privacy-budget-accountant-laplace/
-├── agents/                  # Enterprise agent system (v3.0.0-ENTERPRISE)
-│   ├── __init__.py
-│   ├── api.py              # FastAPI REST endpoints
-│   ├── base.py             # PHI guard, audit trail, security
-│   ├── learning.py         # Bayesian calibration engine
-│   ├── llm_factory.py      # LLM provider abstraction
-│   ├── metrics.py          # Prometheus metrics exporter
-│   ├── models.py           # Pydantic data models with validation
-│   ├── streamer.py         # WebSocket telemetry broadcaster
-│   ├── supervisor.py       # Master orchestrator
-│   └── workers.py          # Specialized domain workers
-├── dp_laplace_budget/       # DP-Laplace budget engine (v2.0.0-FRONTIER)
-│   ├── __init__.py
-│   ├── agents.py           # Distributed component coordination
-│   ├── cli.py              # CLI for DP-Laplace module
-│   ├── engine.py           # Core algorithmic engine
-│   ├── models.py           # Data models
-│   └── server.py           # FastAPI server for DP-Laplace
-├── tests/                   # Test suite
-│   ├── test_privacy_budget_accountant_laplace.py
-│   ├── test_dp_laplace_budget.py
-│   ├── test_enrichment.py
-│   └── test_security_and_validation.py
-├── cli.py                   # Main CLI entry point
-├── dp_laplace_budget_app.py # DP-Laplace app entry point
-├── enrichment.py            # Enrichment feature modules
-├── simulator.py             # High-throughput simulation
-├── web/index.html           # Operations console UI
-├── Dockerfile
-├── docker-compose.yml
-├── pyproject.toml
-└── README.md
-```
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+Python standard library (Laplace accountant), Pydantic 2 / FastAPI (legacy audit API), and vanilla browser JavaScript/HTML/CSS (static demo). Browser features require Web Crypto API and modern JavaScript support. Licensed under [MIT](LICENSE).
