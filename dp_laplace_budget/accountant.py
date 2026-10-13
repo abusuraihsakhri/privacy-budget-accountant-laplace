@@ -53,8 +53,8 @@ def laplace_noise(scale: float, *, uniform: float = None) -> float:
     """
     scale = _finite(scale, "scale", positive=True)
     if uniform is None:
-        # Center each of the 2**53 bins: strictly inside (0, 1).
-        uniform = (secrets.randbits(53) + 0.5) / (2 ** 53)
+        # Avoid floating-point rounding to exactly 1 at the upper endpoint.
+        uniform = (secrets.randbits(53) + 1) / ((2 ** 53) + 2)
     else:
         uniform = _finite(uniform, "uniform")
         if not 0 < uniform < 1:
