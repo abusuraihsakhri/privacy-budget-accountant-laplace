@@ -61,6 +61,11 @@ def test_result_is_noised_and_not_cached():
     assert ledger.spent_epsilon == pytest.approx(0.5)
 
 
+def test_crypto_draw_upper_endpoint_does_not_round_to_one(monkeypatch):
+    monkeypatch.setattr("dp_laplace_budget.accountant.secrets.randbits", lambda bits: (2 ** bits) - 1)
+    assert math.isfinite(laplace_noise(1))
+
+
 def test_noise_endpoints_and_scale_rejected():
     for u in [0, 1, -0.1, float("nan")]:
         with pytest.raises(ValueError):
