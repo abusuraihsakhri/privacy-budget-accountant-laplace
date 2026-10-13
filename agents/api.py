@@ -2,7 +2,10 @@
 FastAPI REST API Server for Privacy Budget Accountant Laplace.
 """
 from typing import Dict, Any, List
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from .base import SecurityException
 from pydantic import BaseModel
 from .base import AuditLogger, PHIGuard
 from .models import SystemTaskPayload, ConsensusDossier
@@ -12,13 +15,26 @@ supervisor = SystemSupervisor(model_provider="mock")
 
 app = FastAPI(
     title="Privacy Budget Accountant Laplace API",
-    description="Enterprise Distributed Component Platform (Privacy-Preserving Federated Healthcare & FHE)",
+    description="Legacy threshold-based task audit API; does not provide a persistent differential privacy ledger.",
     version="3.0.0-ENTERPRISE",
 )
 
 
 class ChatRequest(BaseModel):
     query: str
+
+
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+
+@app.get("/", include_in_schema=False)
+def browser_app():
+    return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/app.js", include_in_schema=False)
+def browser_script():
+    return FileResponse(WEB_DIR / "app.js", media_type="text/javascript")
 
 
 @app.get("/health")
@@ -37,7 +53,10 @@ def metrics():
 
 @app.post("/api/audit")
 def api_audit(payload: SystemTaskPayload):
-    dossier = supervisor.process_task(payload)
+    try:
+        dossier = supervisor.process_task(payload)
+    except SecurityException:
+        raise HTTPException(status_code=422, detail="Input contains a prohibited identifier")
     return dossier.to_dict()
 
 
