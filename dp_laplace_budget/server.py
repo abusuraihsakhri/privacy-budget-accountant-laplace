@@ -15,7 +15,7 @@ def create_app():
 
         app = FastAPI(
             title="DP-Laplace: Epsilon Privacy Budget Allocation & Query Noise Injector",
-            description="Computes global sensitivity for epidemiological count/mean queries, injecting calibrated Laplace noise and enforcing cumulative epsilon limits.",
+            description="Legacy threshold-based DP-Laplace task audit. For actual Laplace noise and session-local epsilon accounting, use dp_laplace_budget.accountant or the static web calculator.",
             version="2.0.0-FRONTIER",
         )
 
