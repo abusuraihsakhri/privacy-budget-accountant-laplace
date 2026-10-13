@@ -3,11 +3,13 @@ Command Line Interface for Privacy Budget Accountant Laplace.
 """
 import argparse
 import csv
+import json
 import sys
 from pathlib import Path
 from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
 from agents.base import AuditLogger
+from dp_laplace_budget.accountant import PrivacyBudget, BudgetExceeded
 
 supervisor = SystemSupervisor(model_provider="mock")
 
@@ -33,6 +35,13 @@ def main(argv=None):
     p_batch = subparsers.add_parser("batch", help="Batch process CSV records")
     p_batch.add_argument("-i", "--input", required=True)
     p_batch.add_argument("-o", "--output", default="results.csv")
+
+    # Session-local Laplace release
+    p_laplace = subparsers.add_parser("laplace", help="Generate one Laplace release with an ephemeral epsilon ledger")
+    p_laplace.add_argument("--total-epsilon", type=float, required=True)
+    p_laplace.add_argument("--epsilon", type=float, required=True)
+    p_laplace.add_argument("--value", type=float, required=True)
+    p_laplace.add_argument("--sensitivity", type=float, required=True)
 
     # Verify Audit
     subparsers.add_parser("verify-audit", help="Verify HMAC audit trail integrity")
@@ -71,6 +80,16 @@ def main(argv=None):
     if args.command == "chat":
         ans = supervisor.query_supervisory_chat(" ".join(args.query))
         print(f"\n[Privacy Budget Accountant Laplace Supervisor]:\n{ans}\n")
+        return 0
+
+    if args.command == "laplace":
+        try:
+            ledger = PrivacyBudget(args.total_epsilon)
+            release = ledger.release(args.value, epsilon=args.epsilon, sensitivity=args.sensitivity)
+        except (ValueError, BudgetExceeded) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(release.to_dict(), indent=2, allow_nan=False))
         return 0
 
     if args.command == "verify-audit":
