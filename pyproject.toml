@@ -31,7 +31,10 @@ dp-laplace-budget = "dp_laplace_budget.cli:main"
 py-modules = ["cli", "simulator", "enrichment", "dp_laplace_budget_app"]
 
 [tool.setuptools.packages.find]
-include = ["agents*", "dp_laplace_budget*"]
+include = ["agents*", "dp_laplace_budget*", "web*"]
+
+[tool.setuptools.package-data]
+web = ["*.html", "*.js"]
 
 [project.urls]
 Homepage = "https://github.com/abusuraihsakhri/privacy-budget-accountant-laplace"
