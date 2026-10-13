@@ -15,7 +15,7 @@ supervisor = SystemSupervisor(model_provider="mock")
 
 app = FastAPI(
     title="Privacy Budget Accountant Laplace API",
-    description="Enterprise Distributed Component Platform (Privacy-Preserving Federated Healthcare & FHE)",
+    description="Legacy threshold-based task audit API; does not provide a persistent differential privacy ledger.",
     version="3.0.0-ENTERPRISE",
 )
 
