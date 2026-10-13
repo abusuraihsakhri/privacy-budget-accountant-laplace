@@ -16,8 +16,8 @@
     }
     const bits = new Uint32Array(2);
     scope.crypto.getRandomValues(bits);
-    // 53 uniformly distributed random bits, centered away from 0 and 1.
-    return ((bits[0] >>> 5) * 67108864 + (bits[1] >>> 6) + 0.5) / 9007199254740992;
+    // Keep both endpoints strictly inside (0, 1) after IEEE-754 rounding.
+    return ((bits[0] >>> 5) * 67108864 + (bits[1] >>> 6) + 1) / 9007199254740994;
   }
 
   function laplace(scale, unit) {
