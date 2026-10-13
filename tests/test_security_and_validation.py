@@ -144,6 +144,24 @@ class TestAuditTrailSecurity:
         trail.logs[1]["prev_hash"] = "tampered_chain_hash"
         assert trail.verify_integrity() is False
 
+    def test_content_tampering_with_same_chain_is_detected(self):
+        trail = AuditTrail(secret_key="test-key-123")
+        trail.log("actor", "tier", "EVENT", {"a": 1})
+        trail.logs[0]["event_type"] = "FORGED_EVENT"
+        assert trail.verify_integrity() is False
+
+    def test_signature_tampering_is_detected(self):
+        trail = AuditTrail(secret_key="test-key-123")
+        trail.log("actor", "tier", "EVENT", {"a": 1})
+        trail.logs[0]["current_hash"] = "0" * 64
+        assert trail.verify_integrity() is False
+
+    def test_get_trail_returns_snapshot(self):
+        trail = AuditTrail(secret_key="test-key-123")
+        trail.log("actor", "tier", "EVENT", {"a": 1})
+        trail.get_trail()[0]["event_type"] = "FORGED_EVENT"
+        assert trail.verify_integrity() is True
+
     def test_missing_secret_key_warns(self):
         # Clear env var if set
         original = os.environ.pop("AUDIT_SECRET_KEY", None)
